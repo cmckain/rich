@@ -1,0 +1,25 @@
+trigger:
+- master
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: 3.10
+  displayName: Install Python
+- script: |
+    python -m pip install -U pip
+    pip install poetry
+    poetry install
+  displayName: Install software
+- script: |
+    poetry build
+  displayName: Package software
+- script: |
+    poetry config repositories.azure https://pkgs.dev.azure.com/cameron0404/_packaging/cameron0404/pypi/upload
+    poetry config http-basic.azure $(username) $(pap)
+    poetry publish -r azure
+    exit 0
+  displayName: Publish software

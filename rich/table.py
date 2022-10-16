@@ -109,6 +109,9 @@ class Column:
     _index: int = 0
     """Index of column."""
 
+    stick_up: bool = False
+    """bool: Cell above this column ends here. Defaults to ``False``."""
+
     _cells: List["RenderableType"] = field(default_factory=list)
 
     def copy(self) -> "Column":
@@ -167,6 +170,7 @@ class Table(JupyterMixin):
         show_footer (bool, optional): Show a footer row. Defaults to False.
         show_edge (bool, optional): Draw a box around the outside of the table. Defaults to True.
         show_lines (bool, optional): Draw lines between every row. Defaults to False.
+        header_only (bool, optional): Only render header. Defaults to False.
         leading (bool, optional): Number of blank lines between rows (precludes ``show_lines``). Defaults to 0.
         style (Union[str, Style], optional): Default style for the table. Defaults to "none".
         row_styles (List[Union, str], optional): Optional list of row styles, if more than one style is given then the styles will alternate. Defaults to None.
@@ -200,6 +204,7 @@ class Table(JupyterMixin):
         show_footer: bool = False,
         show_edge: bool = True,
         show_lines: bool = False,
+        header_only: bool = False,
         leading: int = 0,
         style: StyleType = "none",
         row_styles: Optional[Iterable[StyleType]] = None,
@@ -228,6 +233,7 @@ class Table(JupyterMixin):
         self.show_footer = show_footer
         self.show_edge = show_edge
         self.show_lines = show_lines
+        self.header_only = header_only
         self.leading = leading
         self.collapse_padding = collapse_padding
         self.style = style
@@ -376,6 +382,7 @@ class Table(JupyterMixin):
         max_width: Optional[int] = None,
         ratio: Optional[int] = None,
         no_wrap: bool = False,
+        stick_up: bool = False,
     ) -> None:
         """Add a column to the table.
 
@@ -395,6 +402,7 @@ class Table(JupyterMixin):
             max_width (Optional[int], optional): Maximum width of column, or ``None`` for no maximum. Defaults to None.
             ratio (int, optional): Flexible ratio for the column (requires ``Table.expand`` or ``Table.width``). Defaults to None.
             no_wrap (bool, optional): Set to ``True`` to disable wrapping of this column.
+            stick_up (bool, optional): Set to ``True`` to show raised top.
         """
 
         column = Column(
@@ -412,6 +420,7 @@ class Table(JupyterMixin):
             max_width=max_width,
             ratio=ratio,
             no_wrap=no_wrap,
+            stick_up=stick_up,
         )
         self.columns.append(column)
 
@@ -767,6 +776,7 @@ class Table(JupyterMixin):
         show_footer = self.show_footer
         show_edge = self.show_edge
         show_lines = self.show_lines
+        header_only = self.header_only
         leading = self.leading
 
         _Segment = Segment
@@ -789,7 +799,20 @@ class Table(JupyterMixin):
                 ),
             ]
             if show_edge:
-                yield _Segment(_box.get_top(widths), border_style)
+                to_up = []
+                for i, column in enumerate(columns):
+                    if column.stick_up:
+                        to_up.append(i)
+                _s = _Segment(_box.get_top(widths), border_style)
+                iii = 0
+                _st, _sl = _s.text, list(_s.text)
+                for ii, _l in enumerate(_st):
+                    if _l == "┳":
+                        if iii in to_up:
+                            _sl[ii] = "╋"
+                        iii += 1
+                # _s.text = "".join(_sl)
+                yield _s._replace(text="".join(_sl))
                 yield new_line
         else:
             box_segments = []
@@ -893,7 +916,7 @@ class Table(JupyterMixin):
                     for rendered_cell in cells:
                         yield from rendered_cell[line_no]
                     yield new_line
-            if _box and first and show_header:
+            if _box and first and show_header and not header_only:
                 yield _Segment(
                     _box.get_row(widths, "head", edge=show_edge), border_style
                 )
@@ -916,7 +939,7 @@ class Table(JupyterMixin):
                         )
                     yield new_line
 
-        if _box and show_edge:
+        if _box and show_edge and not header_only:
             yield _Segment(_box.get_bottom(widths), border_style)
             yield new_line
 

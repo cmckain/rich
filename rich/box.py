@@ -443,6 +443,45 @@ MARKDOWN: Box = Box(
     ascii=True,
 )
 
+HEAVY_HEAD_FOOT: Box = Box(
+    """\
+┏━┳┓
+┃ ┃┃
+┡━╇┩
+┃ ┃┃
+├─┼┤
+┢━╈┪
+│ ││
+┗━┻┛
+"""
+)
+
+HEAVY_CHIN_FOOT: Box = Box(
+    """\
+┣━┳┫
+┃ ┃┃
+┡━╇┩
+┃ ┃┃
+├─┼┤
+┢━╈┪
+│ ││
+┗━┻┛
+"""
+)
+
+HEAVY_ONLY: Box = Box(
+    """\
+┏━┳┓
+┃ ┃┃
+....
+
+
+
+
+
+"""
+)
+
 # Map Boxes that don't render with raster fonts on to equivalent that do
 LEGACY_WINDOWS_SUBSTITUTIONS = {
     ROUNDED: SQUARE,

@@ -44,6 +44,7 @@ def install(
     indent_guides: bool = True,
     suppress: Iterable[Union[str, ModuleType]] = (),
     max_frames: int = 100,
+    locals_suppress: Iterable[Any] = (),
 ) -> Callable[[Type[BaseException], BaseException, Optional[TracebackType]], Any]:
     """Install a rich traceback handler.
 
@@ -60,6 +61,7 @@ def install(
         show_locals (bool, optional): Enable display of local variables. Defaults to False.
         indent_guides (bool, optional): Enable indent guides in code and locals. Defaults to True.
         suppress (Sequence[Union[str, ModuleType]]): Optional sequence of modules or paths to exclude from traceback.
+        locals_suppress (Sequence[Any]): Optional sequence of types that should be suppressed in the list of local variables.
 
     Returns:
         Callable: The previous exception handler that was replaced.
@@ -85,6 +87,7 @@ def install(
                 indent_guides=indent_guides,
                 suppress=suppress,
                 max_frames=max_frames,
+                locals_suppress=locals_suppress,
             )
         )
 
@@ -194,6 +197,7 @@ class Traceback:
         locals_max_string (int, optional): Maximum length of string before truncating, or None to disable. Defaults to 80.
         suppress (Sequence[Union[str, ModuleType]]): Optional sequence of modules or paths to exclude from traceback.
         max_frames (int): Maximum number of frames to show in a traceback, 0 for no maximum. Defaults to 100.
+        locals_suppress (Sequence[Any]): Optional sequence of types that should be suppressed in the list of local variables.
 
     """
 
@@ -218,6 +222,7 @@ class Traceback:
         locals_max_string: int = LOCALS_MAX_STRING,
         suppress: Iterable[Union[str, ModuleType]] = (),
         max_frames: int = 100,
+        locals_suppress: Iterable[Any] = (),
     ):
         if trace is None:
             exc_type, exc_value, traceback = sys.exc_info()
@@ -226,7 +231,7 @@ class Traceback:
                     "Value for 'trace' required if not called in except: block"
                 )
             trace = self.extract(
-                exc_type, exc_value, traceback, show_locals=show_locals
+                exc_type, exc_value, traceback, show_locals=show_locals, locals_suppress=locals_suppress
             )
         self.trace = trace
         self.width = width
@@ -251,6 +256,8 @@ class Traceback:
             self.suppress.append(path)
         self.max_frames = max(4, max_frames) if max_frames > 0 else 0
 
+        self.locals_suppress = locals_suppress
+
     @classmethod
     def from_exception(
         cls,
@@ -267,6 +274,7 @@ class Traceback:
         locals_max_string: int = LOCALS_MAX_STRING,
         suppress: Iterable[Union[str, ModuleType]] = (),
         max_frames: int = 100,
+        locals_suppress: Iterable[Any] = (),
     ) -> "Traceback":
         """Create a traceback from exception info
 
@@ -285,12 +293,13 @@ class Traceback:
             locals_max_string (int, optional): Maximum length of string before truncating, or None to disable. Defaults to 80.
             suppress (Iterable[Union[str, ModuleType]]): Optional sequence of modules or paths to exclude from traceback.
             max_frames (int): Maximum number of frames to show in a traceback, 0 for no maximum. Defaults to 100.
+            locals_suppress (Iterable[Any]): Optional sequence of types that should be suppressed in the list of local variables.
 
         Returns:
             Traceback: A Traceback instance that may be printed.
         """
         rich_traceback = cls.extract(
-            exc_type, exc_value, traceback, show_locals=show_locals
+            exc_type, exc_value, traceback, show_locals=show_locals, locals_suppress=locals_suppress,
         )
         return cls(
             rich_traceback,
@@ -304,6 +313,7 @@ class Traceback:
             locals_max_string=locals_max_string,
             suppress=suppress,
             max_frames=max_frames,
+            locals_suppress=locals_suppress,
         )
 
     @classmethod
@@ -315,6 +325,7 @@ class Traceback:
         show_locals: bool = False,
         locals_max_length: int = LOCALS_MAX_LENGTH,
         locals_max_string: int = LOCALS_MAX_STRING,
+        locals_suppress: Iterable[Any] = (),
     ) -> Trace:
         """Extract traceback information.
 
@@ -326,6 +337,7 @@ class Traceback:
             locals_max_length (int, optional): Maximum length of containers before abbreviating, or None for no abbreviation.
                 Defaults to 10.
             locals_max_string (int, optional): Maximum length of string before truncating, or None to disable. Defaults to 80.
+            locals_suppress: Iterable[Any]: Optional sequence of types that should be suppressed in the list of local variables.
 
         Returns:
             Trace: A Trace instance which you can use to construct a `Traceback`.
@@ -342,6 +354,29 @@ class Traceback:
                 return str(_object)
             except Exception:
                 return "<exception str() failed>"
+
+        def clean_values(_object: Any) -> Any:
+            if isinstance(_object, tuple(locals_suppress)):
+                return type(_object)
+            elif isinstance(_object, (list, dict, tuple)):
+                if len(_object) >= 1:
+                    if isinstance(_object, dict):
+                        _t = clean_values(list(_object.values())[0])
+                        if isinstance(_t, type):
+                            _k = type(list(_object.keys())[0])
+                            return type(_object)[_k, _t]
+                        else:
+                            return _object
+                    else:
+                        _t = clean_values(_object[0])
+                        if isinstance(_t, type):
+                            return type(_object)[_t]
+                        else:
+                            return _object
+                else:
+                    return _object
+            else:
+                return _object
 
         while True:
             stack = Stack(
@@ -375,7 +410,7 @@ class Traceback:
                     name=frame_summary.f_code.co_name,
                     locals={
                         key: pretty.traverse(
-                            value,
+                            clean_values(value),
                             max_length=locals_max_length,
                             max_string=locals_max_string,
                         )
