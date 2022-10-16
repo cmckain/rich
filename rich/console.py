@@ -570,6 +570,20 @@ class RenderHook(ABC):
         Returns:
             List[ConsoleRenderable]: A replacement list of renderables.
         """
+    @abstractmethod
+    def process_buffer(
+        self, rendered_buffer: str
+    ) -> str:
+        """Called with the rendered buffer.
+
+        This method can return a new string, or modify and return the same string.
+
+        Args:
+            rendered_buffer (str): A rendered buffer.
+
+        Returns:
+            str: A replacement string.
+        """
 
 
 _windows_console_features: Optional["WindowsConsoleFeatures"] = None
@@ -2038,6 +2052,11 @@ class Console:
                                     raise
                     else:
                         text = self._render_buffer(self._buffer[:])
+
+                        render_hooks = self._render_hooks[:]
+                        for hook in render_hooks:
+                            text = hook.process_buffer(text)
+
                         try:
                             self.file.write(text)
                         except UnicodeEncodeError as error:
